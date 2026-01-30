@@ -6,8 +6,8 @@ build/
 .DS_Store
 
 # Test files and directories
-tests/
-test_*
+# tests/
+# test_*
 
 # Documentation and logs (excluding README.md)
 CLAUDE.md

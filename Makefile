@@ -23,13 +23,23 @@ RUNTIME_OBJS = $(RUNTIME_SRCS:$(SRCDIR)/%.c=$(BUILDDIR)/%.o)
 # Main library
 TARGET_LIB = libjit.a
 
-# Tests
-TEST_SRCS = $(wildcard $(TESTDIR)/unit/*.c)
-TEST_OBJS = $(TEST_SRCS:$(TESTDIR)/unit/%.c=$(BUILDDIR)/tests/unit/%.o)
-TEST_BINS = $(TEST_SRCS:$(TESTDIR)/unit/%.c=$(BUILDDIR)/tests/unit/%)
+# Generic compilation rule
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c | directories
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Tools
-INSPECT_TOOL = $(BUILDDIR)/tools/inspect_jit
+$(TARGET_LIB): $(JIT_OBJS) $(RUNTIME_OBJS)
+	ar rcs $@ $^
+
+# Tests
+TEST_UNIT_SRCS = $(wildcard $(TESTDIR)/unit/*.c)
+TEST_SECURITY_SRCS = $(wildcard $(TESTDIR)/security/*.c)
+
+TEST_UNIT_BINS = $(TEST_UNIT_SRCS:$(TESTDIR)/unit/%.c=$(BUILDDIR)/tests/unit/%)
+TEST_SECURITY_BINS = $(TEST_SECURITY_SRCS:$(TESTDIR)/security/%.c=$(BUILDDIR)/tests/security/%)
+
+TEST_BINS = $(TEST_UNIT_BINS) $(TEST_SECURITY_BINS)
+
+# ...
 
 # Ensure test directories exist
 directories:
@@ -38,30 +48,40 @@ directories:
 	@mkdir -p $(BUILDDIR)/common
 	@mkdir -p $(BUILDDIR)/nvme
 	@mkdir -p $(BUILDDIR)/tests/unit
+	@mkdir -p $(BUILDDIR)/tests/security
+	@mkdir -p $(BUILDDIR)/tests/benchmark
 	@mkdir -p $(BUILDDIR)/tools
 
-$(TARGET_LIB): $(JIT_OBJS) $(RUNTIME_OBJS)
-	ar rcs $@ $^
-
-$(BUILDDIR)/%.o: $(SRCDIR)/%.c | directories
-	$(CC) $(CFLAGS) -c $< -o $@
+# ...
 
 # Compile test objects
 $(BUILDDIR)/tests/unit/%.o: $(TESTDIR)/unit/%.c | directories
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/tests/security/%.o: $(TESTDIR)/security/%.c | directories
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Link test binaries
 $(BUILDDIR)/tests/unit/%: $(BUILDDIR)/tests/unit/%.o $(TARGET_LIB)
 	$(CC) $(LDFLAGS) $< -L. -ljit -o $@
 
-# Build tools
-$(INSPECT_TOOL): $(TOOLS_DIR)/inspect_jit.c $(TARGET_LIB)
-	$(CC) $(CFLAGS) $< -L. -ljit -o $@
+$(BUILDDIR)/tests/security/%: $(BUILDDIR)/tests/security/%.o $(TARGET_LIB)
+	$(CC) $(LDFLAGS) $< -L. -ljit -o $@
 
-tools: $(INSPECT_TOOL)
+# Benchmarks
+TEST_BENCH_SRCS = $(wildcard $(TESTDIR)/benchmark/*.c)
+TEST_BENCH_BINS = $(TEST_BENCH_SRCS:$(TESTDIR)/benchmark/%.c=$(BUILDDIR)/tests/benchmark/%)
+
+$(BUILDDIR)/tests/benchmark/%.o: $(TESTDIR)/benchmark/%.c | directories
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/tests/benchmark/%: $(BUILDDIR)/tests/benchmark/%.o $(TARGET_LIB)
+	$(CC) $(LDFLAGS) $< -L. -ljit -o $@
+
+# ...
 
 test: directories $(TEST_BINS)
-	@for test in $(TEST_BINS); do $$test; done
+	@for test in $(TEST_BINS); do echo "Running $$test..."; $$test; done
 
 clean:
 	rm -rf $(BUILDDIR) $(TARGET_LIB) $(INSPECT_TOOL)

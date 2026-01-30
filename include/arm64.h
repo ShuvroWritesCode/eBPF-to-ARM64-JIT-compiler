@@ -220,6 +220,16 @@ static inline uint32_t arm64_bcond(uint8_t cond, int32_t offset) {
   return 0x54000000 | (((offset >> 2) & 0x7FFFF) << 5) | cond;
 }
 
+// CBZ: cbz xn, #offset
+static inline uint32_t arm64_cbz(uint8_t rn, int32_t offset) {
+  return 0x34000000 | (((offset >> 2) & 0x7FFFF) << 5) | rn;
+}
+
+// CBNZ: cbnz xn, #offset
+static inline uint32_t arm64_cbnz(uint8_t rn, int32_t offset) {
+  return 0x35000000 | (((offset >> 2) & 0x7FFFF) << 5) | rn;
+}
+
 // BL: bl #offset (function call)
 static inline uint32_t arm64_bl(int32_t offset) {
   return 0x94000000 | ((offset >> 2) & 0x03FFFFFF);

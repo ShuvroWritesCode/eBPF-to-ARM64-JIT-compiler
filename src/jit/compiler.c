@@ -97,8 +97,8 @@ static void emit_prologue(jit_ctx_t *ctx) {
   emit32(ctx, 0xd1080000 | (31 << 5) | 31); // sub sp, sp, #512
 
   // Initialize BPF R10 (frame pointer) to top of stack
-  // mov x29, sp
-  emit32(ctx, 0x910003fd);
+  // add x29, sp, #512
+  emit32(ctx, arm64_add_imm(29, 31, 512));
 }
 
 // Emit function epilogue
@@ -589,27 +589,41 @@ static void emit_insn(jit_ctx_t *ctx, const ebpf_insn_t *insns, size_t pc,
 
   // Conditional jumps - Immediate
   case BPF_JMP | BPF_JEQ | BPF_K:
-    emit32(ctx, arm64_movz(ARM64_SCRATCH, insn->imm & 0xFFFF, 0));
-    if ((insn->imm >> 16) & 0xFFFF) {
-      emit32(ctx, arm64_movk(ARM64_SCRATCH, (insn->imm >> 16) & 0xFFFF, 16));
+    if (insn->imm == 0) {
+      // Optimize JEQ r, 0 -> CBZ r, offset
+      record_jump(ctx, pc + 1 + insn->offset,
+                  0x0);               // != 0xFF means 19-bit offset
+      emit32(ctx, arm64_cbz(dst, 0)); // cbz xn, 0 (placeholder)
+    } else {
+      emit32(ctx, arm64_movz(ARM64_SCRATCH, insn->imm & 0xFFFF, 0));
+      if ((insn->imm >> 16) & 0xFFFF) {
+        emit32(ctx, arm64_movk(ARM64_SCRATCH, (insn->imm >> 16) & 0xFFFF, 16));
+      }
+      emit32(ctx,
+             arm64_sxtw(ARM64_SCRATCH, ARM64_SCRATCH)); // Sign extend to 64-bit
+      emit32(ctx, arm64_cmp_reg(dst, ARM64_SCRATCH));
+      record_jump(ctx, pc + 1 + insn->offset, 0x0); // EQ condition
+      emit32(ctx, 0x54000000);                      // b.eq #0 (placeholder)
     }
-    emit32(ctx,
-           arm64_sxtw(ARM64_SCRATCH, ARM64_SCRATCH)); // Sign extend to 64-bit
-    emit32(ctx, arm64_cmp_reg(dst, ARM64_SCRATCH));
-    record_jump(ctx, pc + 1 + insn->offset, 0x0); // EQ condition
-    emit32(ctx, 0x54000000);                      // b.eq #0 (placeholder)
     break;
 
   case BPF_JMP | BPF_JNE | BPF_K:
-    emit32(ctx, arm64_movz(ARM64_SCRATCH, insn->imm & 0xFFFF, 0));
-    if ((insn->imm >> 16) & 0xFFFF) {
-      emit32(ctx, arm64_movk(ARM64_SCRATCH, (insn->imm >> 16) & 0xFFFF, 16));
+    if (insn->imm == 0) {
+      // Optimize JNE r, 0 -> CBNZ r, offset
+      record_jump(ctx, pc + 1 + insn->offset,
+                  0x1);                // != 0xFF means 19-bit offset
+      emit32(ctx, arm64_cbnz(dst, 0)); // cbnz xn, 0 (placeholder)
+    } else {
+      emit32(ctx, arm64_movz(ARM64_SCRATCH, insn->imm & 0xFFFF, 0));
+      if ((insn->imm >> 16) & 0xFFFF) {
+        emit32(ctx, arm64_movk(ARM64_SCRATCH, (insn->imm >> 16) & 0xFFFF, 16));
+      }
+      emit32(ctx,
+             arm64_sxtw(ARM64_SCRATCH, ARM64_SCRATCH)); // Sign extend to 64-bit
+      emit32(ctx, arm64_cmp_reg(dst, ARM64_SCRATCH));
+      record_jump(ctx, pc + 1 + insn->offset, 0x1); // NE condition
+      emit32(ctx, 0x54000001);                      // b.ne #0 (placeholder)
     }
-    emit32(ctx,
-           arm64_sxtw(ARM64_SCRATCH, ARM64_SCRATCH)); // Sign extend to 64-bit
-    emit32(ctx, arm64_cmp_reg(dst, ARM64_SCRATCH));
-    record_jump(ctx, pc + 1 + insn->offset, 0x1); // NE condition
-    emit32(ctx, 0x54000001);                      // b.ne #0 (placeholder)
     break;
 
   case BPF_JMP | BPF_JGT | BPF_K:
@@ -1017,8 +1031,12 @@ static void resolve_jumps(jit_ctx_t *ctx, size_t epilogue_offset) {
       // Unconditional branch: b #offset
       *insn_ptr = arm64_b(rel_off * 4);
     } else {
-      // Conditional branch: b.cond #offset
-      *insn_ptr = arm64_bcond(cond, rel_off * 4);
+      // Conditional branch (b.cond, cbz, cbnz)
+      // All use bits 5-23 for 19-bit offset
+      uint32_t insn = *insn_ptr;
+      insn &= ~0x00FFFFE0;                // Clear bits 5-23
+      insn |= ((rel_off & 0x7FFFF) << 5); // Set new offset
+      *insn_ptr = insn;
     }
   }
 }

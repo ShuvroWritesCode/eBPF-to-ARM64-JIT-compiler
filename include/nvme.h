@@ -30,6 +30,7 @@ void nvme_cleanup(void);
 int nvme_create_namespace(uint32_t nsid, uint64_t size_blocks);
 int nvme_delete_namespace(uint32_t nsid);
 nvme_namespace_t *nvme_get_namespace(uint32_t nsid);
+int nvme_verify_namespace(uint32_t nsid);
 
 // Block I/O operations
 int nvme_read_blocks(uint32_t nsid, uint64_t lba, uint32_t count, void *buffer);

@@ -56,6 +56,10 @@ int tp4091_execute(const tp4091_execute_cmd_t *cmd, uint64_t *result);
 int tp4091_unload(uint32_t program_id);
 
 // Get program by ID
+// Get program by ID
 tp4091_program_t *tp4091_get_program(uint32_t program_id);
+
+// Get currently executing program (context for helpers)
+tp4091_program_t *tp4091_get_current_program(void);
 
 #endif // TP4091_H

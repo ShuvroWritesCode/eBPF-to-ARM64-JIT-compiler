@@ -92,6 +92,20 @@ nvme_namespace_t *nvme_get_namespace(uint32_t nsid) {
   return (ns->state == NS_STATE_ACTIVE) ? ns : NULL;
 }
 
+// Verify namespace
+int nvme_verify_namespace(uint32_t nsid) {
+  if (nsid == 0 || nsid > MAX_NAMESPACES) {
+    return -1;
+  }
+
+  nvme_namespace_t *ns = nvme_get_namespace(nsid);
+  if (!ns || ns->state != NS_STATE_ACTIVE) {
+    return -1;
+  }
+
+  return 0;
+}
+
 // Read blocks
 int nvme_read_blocks(uint32_t nsid, uint64_t lba, uint32_t count,
                      void *buffer) {

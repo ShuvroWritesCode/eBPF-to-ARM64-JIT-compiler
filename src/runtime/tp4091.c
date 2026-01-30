@@ -1,5 +1,6 @@
 #include "tp4091.h"
 #include "ebpf.h"
+#include "helpers.h"
 #include "nvme.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +8,9 @@
 
 // Global program table
 static tp4091_program_t programs[MAX_PROGRAMS];
+
+// Currently executing program (TLS-like context for helpers)
+static tp4091_program_t *current_executing_program = NULL;
 
 // Initialize TP4091 program manager
 int tp4091_init(void) {
@@ -49,7 +53,16 @@ int tp4091_load(const tp4091_load_cmd_t *cmd) {
   ebpf_insn_t *insns = (ebpf_insn_t *)cmd->code;
   size_t insn_count = cmd->code_size / sizeof(ebpf_insn_t);
 
-  jit_func_t jit = jit_compile(insns, insn_count);
+  // Define helpers
+  // Helper IDs are 1-based, we'll make an array of size 6
+  jit_helper_func_t helpers[6] = {0};
+  helpers[BPF_FUNC_storage_read] = (jit_helper_func_t)helper_storage_read;
+  helpers[BPF_FUNC_storage_write] = (jit_helper_func_t)helper_storage_write;
+  helpers[BPF_FUNC_storage_flush] = (jit_helper_func_t)helper_storage_flush;
+  helpers[BPF_FUNC_storage_get_ns] = (jit_helper_func_t)helper_storage_get_ns;
+  helpers[BPF_FUNC_storage_log] = (jit_helper_func_t)helper_storage_log;
+
+  jit_func_t jit = jit_compile_with_helpers(insns, insn_count, helpers, 6);
   if (!jit) {
     fprintf(stderr, "Failed to compile program %u\n", cmd->program_id);
     return -1;
@@ -116,7 +129,9 @@ int tp4091_execute(const tp4091_execute_cmd_t *cmd, uint64_t *result) {
 
   // Execute JIT-compiled program
   // Context could include LBA, block count, buffer, etc.
+  current_executing_program = prog;
   *result = prog->jit_func(cmd->buffer);
+  current_executing_program = NULL;
 
   printf("[TP4091] Executed program %u, result=%lu\n", cmd->program_id,
          *result);
@@ -158,4 +173,9 @@ tp4091_program_t *tp4091_get_program(uint32_t program_id) {
 
   tp4091_program_t *prog = &programs[program_id];
   return (prog->state != PROGRAM_STATE_EMPTY) ? prog : NULL;
+}
+
+// Get currently executing program
+tp4091_program_t *tp4091_get_current_program(void) {
+  return current_executing_program;
 }
