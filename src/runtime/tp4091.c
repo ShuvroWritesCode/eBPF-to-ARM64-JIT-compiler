@@ -1,6 +1,7 @@
 #include "tp4091.h"
 #include "ebpf.h"
 #include "helpers.h"
+#include "maps.h"
 #include "nvme.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +19,7 @@ int tp4091_init(void) {
   for (int i = 0; i < MAX_PROGRAMS; i++) {
     programs[i].state = PROGRAM_STATE_EMPTY;
   }
-  return 0;
+  return maps_init();
 }
 
 // Cleanup TP4091 program manager
@@ -29,6 +30,7 @@ void tp4091_cleanup(void) {
       programs[i].jit_func = NULL;
     }
   }
+  maps_cleanup();
 }
 
 // Load an eBPF program
@@ -54,15 +56,18 @@ int tp4091_load(const tp4091_load_cmd_t *cmd) {
   size_t insn_count = cmd->code_size / sizeof(ebpf_insn_t);
 
   // Define helpers
-  // Helper IDs are 1-based, we'll make an array of size 6
-  jit_helper_func_t helpers[6] = {0};
+  // Helper IDs are 1-based, we need size 9 for map helpers (IDs 6-8)
+  jit_helper_func_t helpers[9] = {0};
   helpers[BPF_FUNC_storage_read] = (jit_helper_func_t)helper_storage_read;
   helpers[BPF_FUNC_storage_write] = (jit_helper_func_t)helper_storage_write;
   helpers[BPF_FUNC_storage_flush] = (jit_helper_func_t)helper_storage_flush;
   helpers[BPF_FUNC_storage_get_ns] = (jit_helper_func_t)helper_storage_get_ns;
   helpers[BPF_FUNC_storage_log] = (jit_helper_func_t)helper_storage_log;
+  helpers[BPF_FUNC_map_lookup_elem] = (jit_helper_func_t)helper_map_lookup_elem;
+  helpers[BPF_FUNC_map_update_elem] = (jit_helper_func_t)helper_map_update_elem;
+  helpers[BPF_FUNC_map_delete_elem] = (jit_helper_func_t)helper_map_delete_elem;
 
-  jit_func_t jit = jit_compile_with_helpers(insns, insn_count, helpers, 6);
+  jit_func_t jit = jit_compile_with_helpers(insns, insn_count, helpers, 9);
   if (!jit) {
     fprintf(stderr, "Failed to compile program %u\n", cmd->program_id);
     return -1;

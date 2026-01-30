@@ -8,11 +8,15 @@ typedef uint64_t (*helper_func_t)(uint64_t r1, uint64_t r2, uint64_t r3,
                                   uint64_t r4, uint64_t r5);
 
 // TP4091 Storage Helper Function IDs
+// TP4091 Storage Helper Function IDs
 #define BPF_FUNC_storage_read 1
 #define BPF_FUNC_storage_write 2
 #define BPF_FUNC_storage_flush 3
 #define BPF_FUNC_storage_get_ns 4
 #define BPF_FUNC_storage_log 5
+#define BPF_FUNC_map_lookup_elem 6
+#define BPF_FUNC_map_update_elem 7
+#define BPF_FUNC_map_delete_elem 8
 
 // Helper function registry
 helper_func_t get_helper_func(uint32_t func_id);

@@ -1,4 +1,5 @@
 #include "helpers.h"
+#include "maps.h"
 #include "nvme.h"
 #include "tp4091.h"
 #include <stdio.h>
@@ -17,6 +18,12 @@ helper_func_t get_helper_func(uint32_t func_id) {
     return helper_storage_get_ns;
   case BPF_FUNC_storage_log:
     return helper_storage_log;
+  case BPF_FUNC_map_lookup_elem:
+    return (helper_func_t)helper_map_lookup_elem;
+  case BPF_FUNC_map_update_elem:
+    return (helper_func_t)helper_map_update_elem;
+  case BPF_FUNC_map_delete_elem:
+    return (helper_func_t)helper_map_delete_elem;
   default:
     return NULL;
   }
