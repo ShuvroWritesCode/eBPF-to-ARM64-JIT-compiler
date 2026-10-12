@@ -1,6 +1,6 @@
 CC = clang
-CFLAGS = -Wall -Wextra -O2 -g -arch arm64 -Iinclude
-LDFLAGS = -arch arm64
+CFLAGS = -Wall -Wextra -O2 -g -Iinclude
+LDFLAGS =
 
 # Directory layout
 SRCDIR = src
